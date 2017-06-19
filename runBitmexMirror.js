@@ -8,7 +8,7 @@ var account = null;
 
 var options = {
   host: 'localhost',
-  port: 3033,
+  port: 3032
 };
 
 callback = function(response) {
@@ -167,10 +167,53 @@ function getBalances(accountId, cb){
   }).end();
 }
 
-function getAccountId(cb){
-  var path = '/createNewAccount'
-  options.path = path;
-  http.request(options, function(response) {
+
+function getJwt(){
+  return new Promise((resolve,reject) =>{
+    var url = `/authorize?scope=profile&response_type=id_token&client_id=yjhvJftHT7j6yjz8LRlGVXOJnsxTZ0tv`;
+    var reqOptions = {host:"https://rappid.eu.auth0.com", path:url};
+
+    var postReq = http.request(reqOptions, function(response) {
+      var str = '';
+
+      response.on('data', function (chunk) {
+        str += chunk;
+      });
+
+      response.on('end', function () {
+        console.log('account register res', response);
+        var data = JSON.parse(str);
+        resolve(data);
+      });
+    });
+
+    postReq.end();
+  });
+}
+
+async function getAccountId(cb){
+  var jwt = await getJwt();
+
+  var path = '/registerUser';
+  var bitMexUser = JSON.stringify( {
+    username: 'bitmex1',
+    email: 'bitmex1@fake.c',
+    name: 'bitmex1',
+    clientId: '-100',
+    userId: '-100',
+    provider: 'bitmexCreator'
+  } );
+
+  var reqOptions = Object.assign({
+      method: 'POST',
+      path,
+      headers: {
+          'Content-Type': 'application/json',
+          'Content-Length': Buffer.byteLength(bitMexUser)
+      }
+  }, options);
+
+  var postReq = http.request(reqOptions, function(response) {
     var str = '';
 
     response.on('data', function (chunk) {
@@ -178,10 +221,14 @@ function getAccountId(cb){
     });
 
     response.on('end', function () {
+        console.log('account register res', response);
       var account_ = JSON.parse(str);
       cb(account_);
     });
-  }).end();
+  });
+
+  postReq.write(bitMexUser);
+  postReq.end();
 }
 
 function adjustBalance(obj, cb){
@@ -257,8 +304,7 @@ function run(){
       } 
     });
   }
-  
-  
+   
   var connString = 'wss://www.bitmex.com/realtime?';
   var params = 'subscribe=trade:XBTUSD,orderBookL2:XBTUSD';
   var websocket = new WebSocket(connString+params);
